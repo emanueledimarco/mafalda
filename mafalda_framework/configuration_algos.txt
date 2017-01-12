@@ -1,0 +1,6 @@
+BlobsFinder Chi2OverDof_rot 2 double
+BlobsFinder maxOccupancy 0.5 double
+BlobsFinder maxClusterSize 1000 double
+BlobsFinder border 0 int
+BlobsFinder discontinuity 1 int
+BlobsFinder lvl1cut -1 int
