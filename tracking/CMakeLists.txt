@@ -16,9 +16,7 @@ include_directories(${CMAKE_SOURCE_DIR} ${ROOT_INCLUDE_DIRS})
 add_definitions(${ROOT_CXX_FLAGS})
 
 #---Create  a main program using the library
-set(SOURCE_FILES kalman.cc btf-tracking.cpp)
+set(SOURCE_FILES kalman.cc LinearTrackFinder.cc btf-tracking.cpp)
 add_executable(btf-tracking ${SOURCE_FILES})
 target_link_libraries(btf-tracking ${ROOT_LIBRARIES})
 
-#set(SOURCE_FILES kalman.cc kalman-test2D.cpp)
-#add_executable(kalman-test2D ${SOURCE_FILES})
