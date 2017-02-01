@@ -58,7 +58,9 @@ int main(int argc, char* argv[]) {
    Int_t           nBlobs;
    Float_t         geoCenter_x[1000];   //[nBlobs]
    Float_t         geoCenter_y[1000];   //[nBlobs]
+   Int_t           event;
 
+   fChain->SetBranchAddress("event", &event);
    fChain->SetBranchAddress("nBlobs", &nBlobs);
    fChain->SetBranchAddress("geoCenter_x", geoCenter_x);
    fChain->SetBranchAddress("geoCenter_y", geoCenter_y);
@@ -68,24 +70,43 @@ int main(int argc, char* argv[]) {
    Long64_t nentries = fChain->GetEntries();
 
    std::vector<float> xcoords,ycoords;
+   HitCollection hits;
    Long64_t nbytes = 0, nb = 0;
+
+   LinearTrackFinder ltf(1,1,499,499);
+   ltf.setHitUncertainty(5);
+   ltf.setSeedingMinHitDistance(100);
+   ltf.setSpaceGranularity(1);
+   ltf.setSearchWindowSize(5,10);
+   ltf.setnMinHits(4);
+   ltf.setMaxTrackAttempts(4);
+   ltf.setDebugLevel(3);
+
+   int debugEv=7;
+
    for (Long64_t jentry=0; jentry<nentries;jentry++) {
       Long64_t ientry = fChain->LoadTree(jentry);
       if (ientry < 0) break;
-      if (jentry !=2) continue;
       nb = fChain->GetEntry(jentry);   nbytes += nb;
+
+      if (debugEv>0 && event<debugEv) continue;      
+      if (debugEv>0 && event>debugEv) break;
+
+      std::cout << "event = " << event << std::endl;
       std::cout << "entry " << jentry << "nBlobs = " << nBlobs << std::endl;
       xcoords.clear(); ycoords.clear();
+      hits.clear();
       for (int b = 0; b<nBlobs; ++b) {
         xcoords.push_back(geoCenter_x[b]);
         ycoords.push_back(geoCenter_y[b]);
+        Hit aHit = std::make_pair(geoCenter_x[b],geoCenter_y[b]);
+        hits.push_back(aHit);
       }
 
 
-      
-
-
-
+      ltf.loadHits(hits);
+      SimpleTrackCollection linearTracks = ltf.makeTracks();
+      std::cout << "nTracks = " << linearTracks.size() << std::endl;
 
       /// here starts Kalman Filter part
 
