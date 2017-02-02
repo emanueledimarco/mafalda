@@ -3,6 +3,7 @@
 #include <TF1.h>
 #include <TCanvas.h>
 #include <TString.h>
+#include <TAxis.h>
 
 #include <LinearTrackFinder.hh>
 
@@ -81,12 +82,7 @@ SimpleTrack LinearTrackFinder::getTrack(HitCollection hits) {
     track.hitsInPattern.push_back(hits[i]);
   }
   
-  // TCanvas *c1 = 0;
-  // if (_debugLevel>2) {
-  //   c1 = new TCanvas("c1","",600,600);
-  //   g.Draw("APE");
-  // }
-  g.Fit("pol1");
+  g.Fit("pol1","Q");
   TF1 *func = g.GetFunction("pol1");
   for(int i=0; i<2; ++i) {
     track.pars[i] = func->GetParameter(i);
@@ -95,8 +91,32 @@ SimpleTrack LinearTrackFinder::getTrack(HitCollection hits) {
   track.chi2 = func->GetChisquare();
   if(_debugLevel>2) {
     TCanvas c1("c1","",600,600);
+    g.SetTitle(""); g.SetName("");
     g.Draw("APE");
-    c1.SaveAs(Form("track_nHits%d_offs%f_coeff%f.pdf",(int)track.hitsInPattern.size(),track.pars[0],track.pars[1]));
+    g.GetXaxis()->SetLimits(_x1,_x2);
+    g.GetYaxis()->SetLimits(_y1,_y2);
+    g.GetXaxis()->SetRangeUser(_x1,_x2);
+    g.GetYaxis()->SetRangeUser(_y1,_y2);
+    g.GetXaxis()->SetTitle("x");
+    g.GetYaxis()->SetTitle("y");
+    g.SetMarkerStyle(kFullSquare);
+    g.SetMarkerColor(kBlack);
+    g.Draw("APE");
+    c1.Update();
+
+    TGraphErrors gothers(_hits.size());
+    for(int i=0; i<(int)_hits.size(); ++i) {
+      if(!hitInTrack(_hits[i],track)) {
+        gothers.SetPoint(i,_hits[i].first,_hits[i].second);
+        gothers.SetPointError(i,_hitUnc,_hitUnc);
+      }
+    }
+    gothers.SetTitle(""); gothers.SetName("");
+    gothers.SetMarkerStyle(kFullSquare);
+    gothers.SetMarkerColor(kGray);
+    gothers.SetLineColor(kGray);
+    gothers.Draw("PE");
+    c1.SaveAs(Form("track_nTotHits%d_nTrackHits%d_offs%f_coeff%f.pdf",(int)_hits.size(),(int)track.hitsInPattern.size(),track.pars[0],track.pars[1]));
   }
   return track;
 }
@@ -110,8 +130,6 @@ void LinearTrackFinder::updateTrack(SimpleTrack &t, double x, double xsize, doub
       std::cout << "\t\t" << thit->first << " , " << thit->second << std::endl;
   }
 
-    
-  
   for(HitCollection::const_iterator hit=_hits.begin(); hit<_hits.end(); ++hit) {
     if(_debugLevel>3) std::cout << "\tHit " << hit->first << " , " << hit->second << std::endl
                                 << "\txwindow = " << x-xsize << " , " << x+xsize << std::endl
@@ -138,7 +156,6 @@ void LinearTrackFinder::updateTrack(SimpleTrack &t, double x, double xsize, doub
 
   SimpleTrack tmpTrack = getTrack(t.hitsInPattern);
 
-  std::cout << tmpTrack.chi2 << "   " << chi2max << "  " << (int)tmpTrack.hitsInPattern.size() << " " << nhitsmin << std::endl;
   t.good = (tmpTrack.chi2 < chi2max && (int)tmpTrack.hitsInPattern.size() >= nhitsmin);
 
   for(int i=0; i<2; ++i) {
@@ -161,38 +178,38 @@ SimpleTrackCollection LinearTrackFinder::makeTracks() {
     if(_debugLevel>0) std::cout << "Track collection size = " << out.size() << std::endl;
     HitCollection seedHits = getInitialHits();
 
-    //    while (failedTracks < _maxTrackAttempts && _hits.size() > 3) {
-      if(_debugLevel>2) std::cout << "LinearTrackFinder::makeTracks. Iterating over the hits. Residual hits = " << _hits.size() << std::endl
-                                  << "max attempts for this track = " << failedTracks << std::endl;
+    if(_debugLevel>2) std::cout << "LinearTrackFinder::makeTracks. Iterating over the hits. Residual hits = " << _hits.size() << std::endl
+                                << "max attempts for this track = " << failedTracks << std::endl;
   
-      SimpleTrack track = getTrack(seedHits);
-      for(double x=_x1; x<_x2; x+=_xsize) updateTrack(track,x,_xsize,_ysize,5,_nHitsMin);
-      if (track.good) {
-        std::cout << "\tGOOD TRACK!" << std::endl;
-        out.push_back(track);
-        failedTracks=0;
-        
+    SimpleTrack track = getTrack(seedHits);
+    for(double x=_x1; x<_x2; x+=_xsize) updateTrack(track,x,_xsize,_ysize,5,_nHitsMin);
+    if (track.good) {
+      out.push_back(track);
+      failedTracks=0;
+ 
+      if(_debugLevel>1) {
+        std::cout << "\tGOOD TRACK!" << std::endl;       
         std::cout << "%%% This track has hits: " << std::endl;
         for(HitCollection::const_iterator thit=track.hitsInPattern.begin(); thit!=track.hitsInPattern.end(); ++thit) {
           std::cout << "\t\t" << thit->first << " , " << thit->second << std::endl;
         }
-
-        std::cout << "\tLOOKING FOR HITS TO BE ERASED (size = " << _hits.size() << "):" << std::endl;
-        for(HitCollection::const_iterator ahit=_hits.begin(); ahit<_hits.end();) {
-          std::cout << "\tCONSIDERING THIS HIT: " << ahit->first << " , " << ahit->second << std::endl; 
-          if(hitInTrack(*ahit,track)) {
-            std::cout << "\t\tERASING THIS  WHICH BELONGS TO A GOOD TRACK " << std::endl;
-            ahit = _hits.erase(ahit);
-          } else {
-            std::cout << "\t\tLEAVING THIS HIT" << std::endl;
-            ++ahit;
-          }
+      }
+      if(_debugLevel>1) std::cout << "\tLOOKING FOR HITS TO BE ERASED (size = " << _hits.size() << "):" << std::endl;
+      for(HitCollection::const_iterator ahit=_hits.begin(); ahit<_hits.end();) {
+        if(_debugLevel>1) std::cout << "\tCONSIDERING THIS HIT: " << ahit->first << " , " << ahit->second << std::endl; 
+        if(hitInTrack(*ahit,track)) {
+          if(_debugLevel>1) std::cout << "\t\tERASING THIS  WHICH BELONGS TO A GOOD TRACK " << std::endl;
+          ahit = _hits.erase(ahit);
+        } else {
+          if(_debugLevel>1) std::cout << "\t\tLEAVING THIS HIT" << std::endl;
+          ++ahit;
         }
-        // good track created. Re-seed from the residual hits
-        seedHits = getInitialHits();
-      } else {
-        failedTracks++;
-      } // if too-many attempts of track have been done for this seed, re-seed
+      }
+      // good track created. Re-seed from the residual hits
+      seedHits = getInitialHits();
+    } else {
+      failedTracks++;
+    } // if too-many attempts of track have been done for this seed, re-seed
   }
   return out;
 }
