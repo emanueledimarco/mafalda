@@ -2,6 +2,8 @@
 #include <utility>
 
 typedef std::pair<double,double> Hit;
+typedef std::pair<Hit,Hit> Seed;
+typedef std::vector<Seed> SeedCollection;
 typedef std::vector<Hit> HitCollection;
 struct SimpleTrack {
   double pars[2];
@@ -22,7 +24,6 @@ public:
   void loadHits(HitCollection hits);
   void setHitUncertainty(double a) { _hitUnc = a; }
   void setSeedingMinHitDistance(double d) { _minDist = d; }
-  void setSpaceGranularity(double g) { _granularity = g; }
   void setSearchWindowSize(double x, double y) { _xsize = x; _ysize = y; }
   void setnMinHits(int n) { _nHitsMin = n; }
   void setMaxTrackAttempts(int n) { _maxTrackAttempts = n; }
@@ -46,10 +47,9 @@ private:
 
   double _x1,_y1,_x2,_y2;
   HitCollection _hits;
-  HitCollection _hitsInWindow;
+  SeedCollection _usedSeeds;
   double _hitUnc;
   double _minDist;
-  double _granularity;
   double _xsize, _ysize;
   int _nHitsMin;
   int _maxTrackAttempts;

@@ -76,10 +76,9 @@ int main(int argc, char* argv[]) {
    LinearTrackFinder ltf(1,1,499,499);
    ltf.setHitUncertainty(5);
    ltf.setSeedingMinHitDistance(100);
-   ltf.setSpaceGranularity(1);
-   ltf.setSearchWindowSize(5,10);
+   ltf.setSearchWindowSize(1,10);
    ltf.setnMinHits(4);
-   ltf.setMaxTrackAttempts(4);
+   ltf.setMaxTrackAttempts(10);
    ltf.setDebugLevel(3);
 
    int debugEv=7;
