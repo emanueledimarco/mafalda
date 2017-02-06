@@ -5,6 +5,7 @@
 
 #include "TFile.h"
 #include "TH1F.h"
+#include "TTree.h"
 #include <map>
 
 class TracksAnalyzer {
@@ -24,7 +25,10 @@ private:
   
   H1DCollection _h1ds;
   TFile* _fileout;
+  TTree* _tree;
   bool _saveFigs;
+  int _nTracks;
+  double _nHits[1000], _chi2[1000], _direction[1000];
 
 };
 

@@ -26,17 +26,33 @@ void TracksAnalyzer::beginJob() {
   _h1ds[std::string(chi2->GetName())]=chi2;
   _h1ds[std::string(direction->GetName())]=direction;
 
+  _tree = new TTree("TrackFinder","TrackFinder");
+  _tree->Branch("nTracks",&_nTracks,"nTracks/I");
+  _tree->Branch("nHits",_nHits,"nHits[nTracks]/D");
+  _tree->Branch("chi2",_chi2,"chi2[nTracks]/D");
+  _tree->Branch("direction",_direction,"direction[nTracks]/D");
+
 }
 
 void TracksAnalyzer::analyze(SimpleTrackCollection tracks) {
 
   _h1ds["nTracks"]->Fill((int)tracks.size());
+  _nTracks=(int)tracks.size();
 
+  int t=0;
   for(SimpleTrackCollection::const_iterator tk=tracks.begin();tk!=tracks.end();++tk) {
     _h1ds["nHits"]->Fill(tk->hitsInPattern.size());
     _h1ds["chi2"]->Fill(tk->chi2);
     _h1ds["direction"]->Fill(tk->pars[1]);
+
+    _nHits[t] = tk->hitsInPattern.size();
+    _chi2[t] = tk->chi2;
+    _direction[t] = tk->pars[1];
+
+    t++;
   }
+  
+  _tree->Fill();
 
 }
 
@@ -57,6 +73,7 @@ void TracksAnalyzer::endJob() {
       c1->SaveAs(Form("%s.pdf",h1d->GetName()));
     }
   }
+  _tree->Write();
   _fileout->Close();
 
 }
