@@ -53,9 +53,11 @@ HitCollection LinearTrackFinder::getInitialHits() {
     random_one = uni(rng);
     
     random_two = 0;
-    while(dist<_minDist) {
+    int nComb=0;
+    while(dist<_minDist && nComb<5) {
       random_two = uni(rng);
       dist = distance(_hits[random_one],_hits[random_two]);
+      nComb++;
     }
     Seed thisSeed = std::make_pair(_hits[random_one],_hits[random_two]);
     SeedCollection::const_iterator sitr = std::find(_usedSeeds.begin(), _usedSeeds.end(), thisSeed);
@@ -89,6 +91,7 @@ SimpleTrack LinearTrackFinder::getTrack(HitCollection hits) {
     track.errors[i] = func->GetParError(i);
   }
   track.chi2 = func->GetChisquare();
+  track.good = false; // decided only at the update level
   if(_debugLevel>2) {
     TCanvas c1("c1","",600,600);
     g.SetTitle(""); g.SetName("");
@@ -157,6 +160,11 @@ void LinearTrackFinder::updateTrack(SimpleTrack &t, double x, double xsize, doub
   SimpleTrack tmpTrack = getTrack(t.hitsInPattern);
 
   t.good = (tmpTrack.chi2 < chi2max && (int)tmpTrack.hitsInPattern.size() >= nhitsmin);
+  if(_debugLevel>2) {
+    std::cout << "--- Gooddness of track:" << std::endl;
+    std::cout << "chi2 = " << tmpTrack.chi2 << " (" << chi2max << ")" <<  std::endl
+              << "hits in track = " << (int)tmpTrack.hitsInPattern.size() << " (" << nhitsmin << ")" << std::endl;
+  }
 
   for(int i=0; i<2; ++i) {
     t.pars[i] = tmpTrack.pars[i];
@@ -182,6 +190,7 @@ SimpleTrackCollection LinearTrackFinder::makeTracks() {
                                 << "max attempts for this track = " << failedTracks << std::endl;
   
     SimpleTrack track = getTrack(seedHits);
+    
     for(double x=_x1; x<_x2; x+=_xsize) updateTrack(track,x,_xsize,_ysize,5,_nHitsMin);
     if (track.good) {
       out.push_back(track);
