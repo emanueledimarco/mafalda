@@ -1,9 +1,11 @@
 #include <random>
+#include <algorithm>
 #include <TGraphErrors.h>
 #include <TF1.h>
 #include <TCanvas.h>
 #include <TString.h>
 #include <TAxis.h>
+#include <TMath.h>
 
 #include <LinearTrackFinder.hh>
 
@@ -15,6 +17,8 @@ LinearTrackFinder::LinearTrackFinder(double x1, double y1, double x2, double y2)
   _minDist(0),
   _xsize(1),
   _ysize(1),
+  _cmin(-1000),
+  _cmax(1000),
   _nHitsMin(2),
   _maxTrackAttempts(5),
   _debugLevel(0) {
@@ -46,7 +50,8 @@ HitCollection LinearTrackFinder::getInitialHits() {
   int nTrial=0;
   int random_one, random_two;
   double dist = 0;
-  while (newSeed==false && nTrial<5) {
+  double seedSlope = 0;
+  while (newSeed==false && nTrial<10) {
     std::random_device rd;     // only used once to initialise (seed) engine
     std::mt19937 rng(rd());    // random-number engine used (Mersenne-Twister in this case)
     std::uniform_int_distribution<int> uni(0,nHits-1); // guaranteed unbiased
@@ -54,10 +59,22 @@ HitCollection LinearTrackFinder::getInitialHits() {
     
     random_two = 0;
     int nComb=0;
-    while(dist<_minDist && nComb<5) {
-      random_two = uni(rng);
-      dist = distance(_hits[random_one],_hits[random_two]);
+    while(dist < _minDist && nComb < 5*nHits ) {
       nComb++;
+      random_two = uni(rng);
+      if(random_two==random_one) continue;
+      dist = distance(_hits[random_one],_hits[random_two]);
+      int one, two;
+      if(_hits[random_one].first < _hits[random_two].first) {
+        one = random_one; two = random_two;
+      } else {
+        one = random_two; two = random_one;
+      }
+      double dx = _hits[two].first - _hits[one].first;
+      double dy = _hits[two].second - _hits[one].second;
+      seedSlope = dy/dx;
+      if(seedSlope < _cmin || seedSlope > _cmax) continue;
+      if(_debugLevel>2) std::cout << "Seed slope = " << seedSlope << std::endl;
     }
     Seed thisSeed = std::make_pair(_hits[random_one],_hits[random_two]);
     SeedCollection::const_iterator sitr = std::find(_usedSeeds.begin(), _usedSeeds.end(), thisSeed);
@@ -70,7 +87,8 @@ HitCollection LinearTrackFinder::getInitialHits() {
   if(_debugLevel>0) std::cout << "Got the following hits of the track: " << std::endl
                               << _hits[random_one].first << " , " << _hits[random_one].second << std::endl
                               << _hits[random_two].first << " , " << _hits[random_two].second << std::endl
-                              << "with a distance of " << dist << std::endl;
+                              << "with a distance of " << dist << std::endl
+                              << "and a seed slope of " << seedSlope << std::endl;
   return out;
 }
 
@@ -84,8 +102,9 @@ SimpleTrack LinearTrackFinder::getTrack(HitCollection hits) {
     track.hitsInPattern.push_back(hits[i]);
   }
   
-  g.Fit("pol1","Q");
-  TF1 *func = g.GetFunction("pol1");
+  TF1 *func = new TF1("line","pol1",_x1,_x2);
+  func->SetParameter(1,0.5*(_cmin+_cmax));
+  g.Fit("line","Q");
   for(int i=0; i<2; ++i) {
     track.pars[i] = func->GetParameter(i);
     track.errors[i] = func->GetParError(i);
@@ -119,8 +138,10 @@ SimpleTrack LinearTrackFinder::getTrack(HitCollection hits) {
     gothers.SetMarkerColor(kGray);
     gothers.SetLineColor(kGray);
     gothers.Draw("PE");
-    c1.SaveAs(Form("track_nTotHits%d_nTrackHits%d_offs%f_coeff%f.pdf",(int)_hits.size(),(int)track.hitsInPattern.size(),track.pars[0],track.pars[1]));
+    std::cout << "Track parameters:" << track.pars[0] << "\t"  << track.pars[1] << std::endl;
+    c1.SaveAs(Form("track_nTotHits%d_nTrackHits%d_offs%03.3f_coeff%03.3f.pdf",(int)_hits.size(),(int)track.hitsInPattern.size(),track.pars[0],track.pars[1]));
   }
+  delete func;
   return track;
 }
 
@@ -159,7 +180,8 @@ void LinearTrackFinder::updateTrack(SimpleTrack &t, double x, double xsize, doub
 
   SimpleTrack tmpTrack = getTrack(t.hitsInPattern);
 
-  t.good = (tmpTrack.chi2 < chi2max && (int)tmpTrack.hitsInPattern.size() >= nhitsmin);
+  t.good = (tmpTrack.chi2 < chi2max && (int)tmpTrack.hitsInPattern.size() >= nhitsmin &&
+            t.pars[1] > _cmin && t.pars[1] < _cmax);
   if(_debugLevel>2) {
     std::cout << "--- Gooddness of track:" << std::endl;
     std::cout << "chi2 = " << tmpTrack.chi2 << " (" << chi2max << ")" <<  std::endl
@@ -181,17 +203,20 @@ SimpleTrackCollection LinearTrackFinder::makeTracks() {
   if(_debugLevel > 0 ) std::cout << "Inital hits of the event = " << _hits.size() << std::endl;
 
   int failedTracks=0;
-  while (_hits.size() > 3 && failedTracks < _maxTrackAttempts) {
+  int maxAttempts = _maxTrackAttempts;
+  while (_hits.size() > 3 && failedTracks < maxAttempts) {
 
     if(_debugLevel>0) std::cout << "Track collection size = " << out.size() << std::endl;
     HitCollection seedHits = getInitialHits();
 
     if(_debugLevel>2) std::cout << "LinearTrackFinder::makeTracks. Iterating over the hits. Residual hits = " << _hits.size() << std::endl
                                 << "max attempts for this track = " << failedTracks << std::endl;
+
+    maxAttempts = std::min(_maxTrackAttempts,(int)_hits.size());
   
     SimpleTrack track = getTrack(seedHits);
     
-    for(double x=_x1; x<_x2; x+=_xsize) updateTrack(track,x,_xsize,_ysize,5,_nHitsMin);
+    for(double x=_x1; x<_x2; x+=_xsize) updateTrack(track,x,_xsize,_ysize,10,_nHitsMin);
     if (track.good) {
       out.push_back(track);
       failedTracks=0;
@@ -215,6 +240,7 @@ SimpleTrackCollection LinearTrackFinder::makeTracks() {
         }
       }
       // good track created. Re-seed from the residual hits
+      _usedSeeds.clear();
       seedHits = getInitialHits();
     } else {
       failedTracks++;
@@ -226,4 +252,8 @@ SimpleTrackCollection LinearTrackFinder::makeTracks() {
 bool LinearTrackFinder::hitInTrack(Hit hit, SimpleTrack t) {
   HitCollection::const_iterator posInPattern = std::find(t.hitsInPattern.begin(), t.hitsInPattern.end(), hit);
   return (posInPattern != t.hitsInPattern.end());
+}
+
+int LinearTrackFinder::nPossibleSeeds(int nhits) {
+  return (int) 0.5 * TMath::Factorial(nhits) / TMath::Factorial(nhits - 2);
 }

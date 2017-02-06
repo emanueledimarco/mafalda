@@ -30,8 +30,9 @@ public:
   void setSearchWindowSize(double x, double y) { _xsize = x; _ysize = y; }
   void setnMinHits(int n) { _nHitsMin = n; }
   void setMaxTrackAttempts(int n) { _maxTrackAttempts = n; }
-
+  void setTrackCoeffRange(double min, double max) {_cmin=min; _cmax=max; }
   void setDebugLevel(int n) { _debugLevel = n; }
+  int getResidualHits() { return _hits.size(); }
   SimpleTrackCollection makeTracks();
 
 private:
@@ -48,6 +49,7 @@ private:
   SimpleTrack getTrack(HitCollection hits);
   void updateTrack(SimpleTrack &t, double x, double xsize, double ysize, double chi2max, int nhitsmin);
   bool hitInTrack(Hit hit, SimpleTrack t);
+  int nPossibleSeeds(int nhits);
 
   double _x1,_y1,_x2,_y2;
   HitCollection _hits;
@@ -55,6 +57,7 @@ private:
   double _hitUnc;
   double _minDist;
   double _xsize, _ysize;
+  double _cmin, _cmax;
   int _nHitsMin;
   int _maxTrackAttempts;
   int _debugLevel;
