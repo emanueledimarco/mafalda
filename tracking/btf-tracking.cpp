@@ -77,17 +77,18 @@ int main(int argc, char* argv[]) {
 
   LinearTrackFinder ltf(1,1,499,499);
   ltf.setHitUncertainty(5);
-  ltf.setSeedingMinHitDistance(100);
+  ltf.setSeedingMinHitDistance(200);
   ltf.setSearchWindowSize(1,10);
   ltf.setnMinHits(4);
-  ltf.setMaxTrackAttempts(10);
-  ltf.setDebugLevel(3);
+  ltf.setTrackCoeffRange(0.7,1.42); // diagonal BTF tracks (35-55 deg)
+  ltf.setDebugLevel(0);
 
   TracksAnalyzer tkAna;
   tkAna.setSaveFigs(true);
   tkAna.beginJob();
 
-  int debugEv=1200;
+  //  int debugEv=1200; // crowded
+  int debugEv=-1;
 
   for (Long64_t jentry=0; jentry<nentries;jentry++) {
     Long64_t ientry = fChain->LoadTree(jentry);
@@ -97,8 +98,8 @@ int main(int argc, char* argv[]) {
     if (debugEv>0 && event<debugEv) continue;      
     if (debugEv>0 && event>debugEv) break;
 
-    std::cout << "event = " << event << std::endl;
-    std::cout << "entry " << jentry << "nBlobs = " << nBlobs << std::endl;
+    std::cout << "entry " << jentry << "\tnBlobs = " << nBlobs << std::endl;
+    //if(nBlobs<100 || nBlobs>300) continue;
     xcoords.clear(); ycoords.clear();
     hits.clear();
     for (int b = 0; b<nBlobs; ++b) {
@@ -109,13 +110,14 @@ int main(int argc, char* argv[]) {
     }
 
     ltf.loadHits(hits);
+    ltf.setMaxTrackAttempts(20);
     SimpleTrackCollection linearTracks = ltf.makeTracks();
     std::cout << "nTracks = " << linearTracks.size() << std::endl;
 
     tkAna.analyze(linearTracks);
 
-    /// here starts Kalman Filter part
-
+    /*
+    /// here starts Kalman Filter part    
     // Best guess of initial states
     Eigen::VectorXd x0(n);
     x0 << xcoords[0], ycoords[0], 1, 1;
@@ -132,6 +134,8 @@ int main(int argc, char* argv[]) {
       std::cout << "t = " << t << ", " << "y[" << i << "] = " << y.transpose()
                 << ", x_hat[" << i << "] = " << kf.state().transpose() << std::endl;
     }
+    */
+
   }
 
   tkAna.endJob();
