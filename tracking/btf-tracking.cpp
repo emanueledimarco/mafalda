@@ -7,6 +7,7 @@
 #include "TTreeReaderValue.h"
 #include "TTreeReaderArray.h"
 
+#include "TracksAnalyzer.hh"
 #include "LinearTrackFinder.hh"
 #include "kalman.hh"
 
@@ -54,78 +55,86 @@ int main(int argc, char* argv[]) {
   if (!myFile || myFile->IsZombie()) {
     return 0;
   }
+  
+  
+  Int_t           nBlobs;
+  Float_t         geoCenter_x[1000];   //[nBlobs]
+  Float_t         geoCenter_y[1000];   //[nBlobs]
+  Int_t           event;
 
-   Int_t           nBlobs;
-   Float_t         geoCenter_x[1000];   //[nBlobs]
-   Float_t         geoCenter_y[1000];   //[nBlobs]
-   Int_t           event;
+  fChain->SetBranchAddress("event", &event);
+  fChain->SetBranchAddress("nBlobs", &nBlobs);
+  fChain->SetBranchAddress("geoCenter_x", geoCenter_x);
+  fChain->SetBranchAddress("geoCenter_y", geoCenter_y);
 
-   fChain->SetBranchAddress("event", &event);
-   fChain->SetBranchAddress("nBlobs", &nBlobs);
-   fChain->SetBranchAddress("geoCenter_x", geoCenter_x);
-   fChain->SetBranchAddress("geoCenter_y", geoCenter_y);
+  if (fChain == 0) return 0;
 
-   if (fChain == 0) return 0;
+  Long64_t nentries = fChain->GetEntries();
 
-   Long64_t nentries = fChain->GetEntries();
+  std::vector<float> xcoords,ycoords;
+  HitCollection hits;
+  Long64_t nbytes = 0, nb = 0;
 
-   std::vector<float> xcoords,ycoords;
-   HitCollection hits;
-   Long64_t nbytes = 0, nb = 0;
+  LinearTrackFinder ltf(1,1,499,499);
+  ltf.setHitUncertainty(5);
+  ltf.setSeedingMinHitDistance(100);
+  ltf.setSearchWindowSize(1,10);
+  ltf.setnMinHits(4);
+  ltf.setMaxTrackAttempts(10);
+  ltf.setDebugLevel(3);
 
-   LinearTrackFinder ltf(1,1,499,499);
-   ltf.setHitUncertainty(5);
-   ltf.setSeedingMinHitDistance(100);
-   ltf.setSearchWindowSize(1,10);
-   ltf.setnMinHits(4);
-   ltf.setMaxTrackAttempts(10);
-   ltf.setDebugLevel(3);
+  TracksAnalyzer tkAna;
+  tkAna.setSaveFigs(true);
+  tkAna.beginJob();
 
-   int debugEv=7;
+  int debugEv=1200;
 
-   for (Long64_t jentry=0; jentry<nentries;jentry++) {
-      Long64_t ientry = fChain->LoadTree(jentry);
-      if (ientry < 0) break;
-      nb = fChain->GetEntry(jentry);   nbytes += nb;
+  for (Long64_t jentry=0; jentry<nentries;jentry++) {
+    Long64_t ientry = fChain->LoadTree(jentry);
+    if (ientry < 0) break;
+    nb = fChain->GetEntry(jentry);   nbytes += nb;
 
-      if (debugEv>0 && event<debugEv) continue;      
-      if (debugEv>0 && event>debugEv) break;
+    if (debugEv>0 && event<debugEv) continue;      
+    if (debugEv>0 && event>debugEv) break;
 
-      std::cout << "event = " << event << std::endl;
-      std::cout << "entry " << jentry << "nBlobs = " << nBlobs << std::endl;
-      xcoords.clear(); ycoords.clear();
-      hits.clear();
-      for (int b = 0; b<nBlobs; ++b) {
-        xcoords.push_back(geoCenter_x[b]);
-        ycoords.push_back(geoCenter_y[b]);
-        Hit aHit = std::make_pair(geoCenter_x[b],geoCenter_y[b]);
-        hits.push_back(aHit);
-      }
+    std::cout << "event = " << event << std::endl;
+    std::cout << "entry " << jentry << "nBlobs = " << nBlobs << std::endl;
+    xcoords.clear(); ycoords.clear();
+    hits.clear();
+    for (int b = 0; b<nBlobs; ++b) {
+      xcoords.push_back(geoCenter_x[b]);
+      ycoords.push_back(geoCenter_y[b]);
+      Hit aHit = std::make_pair(geoCenter_x[b],geoCenter_y[b]);
+      hits.push_back(aHit);
+    }
 
+    ltf.loadHits(hits);
+    SimpleTrackCollection linearTracks = ltf.makeTracks();
+    std::cout << "nTracks = " << linearTracks.size() << std::endl;
 
-      ltf.loadHits(hits);
-      SimpleTrackCollection linearTracks = ltf.makeTracks();
-      std::cout << "nTracks = " << linearTracks.size() << std::endl;
+    tkAna.analyze(linearTracks);
 
-      /// here starts Kalman Filter part
+    /// here starts Kalman Filter part
 
+    // Best guess of initial states
+    Eigen::VectorXd x0(n);
+    x0 << xcoords[0], ycoords[0], 1, 1;
+    kf.init(0.,x0);
 
-      // Best guess of initial states
-      Eigen::VectorXd x0(n);
-      x0 << xcoords[0], ycoords[0], 1, 1;
-      kf.init(0.,x0);
+    // Feed measurements into filter, output estimated states
+    double t = 0;
+    Eigen::VectorXd y(m);
+    std::cout << "t = " << t << ", " << "x_hat[0]: " << kf.state().transpose() << std::endl;
+    for(int i = 0; i < xcoords.size(); i++) {
+      t += dt;
+      y << xcoords[i], ycoords[i];
+      kf.update(y);
+      std::cout << "t = " << t << ", " << "y[" << i << "] = " << y.transpose()
+                << ", x_hat[" << i << "] = " << kf.state().transpose() << std::endl;
+    }
+  }
 
-      // Feed measurements into filter, output estimated states
-      double t = 0;
-      Eigen::VectorXd y(m);
-      std::cout << "t = " << t << ", " << "x_hat[0]: " << kf.state().transpose() << std::endl;
-      for(int i = 0; i < xcoords.size(); i++) {
-        t += dt;
-        y << xcoords[i], ycoords[i];
-        kf.update(y);
-        std::cout << "t = " << t << ", " << "y[" << i << "] = " << y.transpose()
-                  << ", x_hat[" << i << "] = " << kf.state().transpose() << std::endl;
-      }
-   }
+  tkAna.endJob();
+
   return 0;
 }
