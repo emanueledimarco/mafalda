@@ -1,3 +1,6 @@
+#ifndef KALMAN_HH
+#define KALMAN_HH
+
 /**
 * Kalman filter implementation using Eigen. Based on the following
 * introductory paper:
@@ -86,3 +89,5 @@ private:
   // Estimated states
   Eigen::VectorXd x_hat, x_hat_new;
 };
+
+#endif

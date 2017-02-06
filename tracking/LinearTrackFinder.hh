@@ -1,3 +1,6 @@
+#ifndef LINEAR_TRACK_FINDER_HH
+#define LINEAR_TRACK_FINDER_HH
+
 #include <vector>
 #include <utility>
 
@@ -27,6 +30,7 @@ public:
   void setSearchWindowSize(double x, double y) { _xsize = x; _ysize = y; }
   void setnMinHits(int n) { _nHitsMin = n; }
   void setMaxTrackAttempts(int n) { _maxTrackAttempts = n; }
+
   void setDebugLevel(int n) { _debugLevel = n; }
   SimpleTrackCollection makeTracks();
 
@@ -56,3 +60,5 @@ private:
   int _debugLevel;
   
 };
+
+#endif
